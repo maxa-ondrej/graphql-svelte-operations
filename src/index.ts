@@ -14,7 +14,7 @@ import {
   GraphQLType,
 } from "graphql";
 
-export function create_variables(args: readonly GraphQLArgument[]) {
+function create_variables(args: readonly GraphQLArgument[]) {
   if (args.length === 0) return "undefined";
   return (
     "{" +
@@ -30,14 +30,14 @@ export function create_variables(args: readonly GraphQLArgument[]) {
   );
 }
 
-export function create_variables_array(args: readonly GraphQLArgument[]) {
+function create_variables_array(args: readonly GraphQLArgument[]) {
   if (args.length === 0) return "{}";
   return (
     "{" + args.map((arg) => `"${arg.name}": "${arg.type}"`).join(",") + "}"
   );
 }
 
-export function get_type(
+function get_type(
   gql: GraphQLType | GraphQLInputType | GraphQLOutputType,
   nil = true
 ) {
