@@ -1,4 +1,6 @@
 import { PluginFunction, Types } from "@graphql-codegen/plugin-helpers";
+import { gql, OperationContext } from "@urql/svelte";
+import type { AnyVariables, TypedDocumentNode } from "@urql/core";
 
 import {
   GraphQLSchema,
@@ -12,9 +14,14 @@ import {
   type GraphQLInputType,
   type GraphQLOutputType,
   GraphQLType,
+  print,
+  DocumentNode,
+  OperationDefinitionNode,
+  FieldNode,
+  Kind,
 } from "graphql";
 
-function create_variables(args: readonly GraphQLArgument[]) {
+function create_variables(args: readonly GraphQLArgument[], id: string) {
   if (args.length === 0) return "undefined";
   return (
     "{" +
@@ -22,6 +29,7 @@ function create_variables(args: readonly GraphQLArgument[]) {
       .map(
         (arg) =>
           `"${arg.name}"${isNullableType(arg.type) ? "?" : ""}: ${get_type(
+            id,
             arg.type
           )}`
       )
@@ -38,23 +46,29 @@ function create_variables_array(args: readonly GraphQLArgument[]) {
 }
 
 function get_type(
+  id: string,
   gql: GraphQLType | GraphQLInputType | GraphQLOutputType,
   nil = true
 ) {
   if (nil && isNullableType(gql)) {
-    return `Types.Maybe<${get_type(gql, false)}>`;
+    return `${id}Types.Maybe<${get_type(id, gql, false)}>`;
   }
   if (nil && isNonNullType(gql)) {
-    return get_type(assertNonNullType(gql).ofType, false);
+    return get_type(id, assertNonNullType(gql).ofType, false);
   }
   if (isListType(gql)) {
-    return get_type(assertListType(gql).ofType) + "[]";
+    return get_type(id, assertListType(gql).ofType) + "[]";
   }
   if (isScalarType(gql)) {
-    return `Types.Scalars['${gql}']`;
+    return `${id}Types.Scalars['${gql}']`;
   }
-  return `Types.${gql}`;
+  return `${id}Types.${gql}`;
 }
+
+export type AdditionalOptions = {
+  context?: Partial<OperationContext>;
+  fields?: string[];
+};
 
 export type SvelteOperationsPluginConfig = {
   types: string;
@@ -67,43 +81,47 @@ export const plugin: PluginFunction<SvelteOperationsPluginConfig, string> = (
   documents: Types.DocumentFile[],
   config: SvelteOperationsPluginConfig
 ) => {
+  const id = makeid(16);
   const typesPath = config.types;
-  let result = `import type * as Types from '${typesPath}';
+  let result = `import type * as ${id}Types from '${typesPath}';
+import type { AdditionalOptions as ${id}Types_AdditionalOptions } from '@majksa/svelte-operations';
 `;
   const queries = schema.getQueryType()?.getFields();
   const mutations = schema.getMutationType()?.getFields();
   if (config.queries === true && queries !== undefined) {
-    result += `type Query<R = object | null, V = object> = { R: R; V?: V };
-export function query<Q extends Query>(variables: Q['V'] = undefined) {
+    result += `type ${id}Types_Query<R = object | null, V = object> = { R: R; V?: V };
+export function query<Q extends ${id}Types_Query>(variables: Q['V'] = undefined, options: ${id}Types_AdditionalOptions | undefined = undefined) {
   return new Promise<Q['R']>((r) => r({} as Q['R']));
 }
 `;
     Object.values(queries).forEach((query) => {
       const name = query.name;
       result += `
-export type ${name} = Query<${get_type(query.type)}, ${create_variables(
-        query.args
-      )}>;
+export type ${name} = ${id}Types_Query<${get_type(
+        id,
+        query.type
+      )}, ${create_variables(query.args, id)}>;
 export const ${name}__variables = ${create_variables_array(query.args)};
 `;
     });
   }
   if (config.mutations === true && mutations !== undefined) {
-    result += `type Mutation<R = object | null, V = object> = { R: R; V?: V };
-export function mutation<Q extends Query>(variables: Q['V'] = undefined) {
-  return new Promise<Q['R']>((r) => r({} as Q['R']));
+    result += `type ${id}Types_Mutation<R = object | null, V = object> = { R: R; V?: V };
+export function mutation<M extends ${id}Types_Mutation>(variables: M['V'] = undefined, options: ${id}Types_AdditionalOptions | undefined = undefined) {
+  return new Promise<M['R']>((r) => r({} as M['R']));
 }
 `;
-  }
-  Object.values(mutations).forEach((mutation) => {
-    const name = mutation.name;
-    result += `
-export type ${name} = Mutation<${get_type(mutation.type)}, ${create_variables(
-      mutation.args
-    )}>;
+    Object.values(mutations).forEach((mutation) => {
+      const name = mutation.name;
+      result += `
+export type ${name} = ${id}Types_Mutation<${get_type(
+        id,
+        mutation.type
+      )}, ${create_variables(mutation.args, id)}>;
 export const ${name}__variables = ${create_variables_array(mutation.args)};
 `;
-  });
+    });
+  }
   return result;
 };
 
@@ -328,25 +346,7 @@ function create_gql_body(fields: object) {
 function escape_regex(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-/*
-function get_imported_types(
-  content: string,
-  imported: string[],
-  types: string
-) {
-  const imported_types = imported
-    .filter((s) => s.startsWith("type "))
-    .map((s) => s.slice(4))
-    .map((s) => s.trim());
-  let has_import = content.match(
-    `import\\s+type\\s*{([^}]+)}\\s*from\\s*['"]${escape_regex(types)}['"]`
-  );
-  if (has_import !== null) {
-    imported_types.push(...has_import[1].split(",").map((s) => s.trim()));
-  }
-  return imported_types;
-}
-*/
+
 function makeid(length: number) {
   let result = "";
   const characters = "abcdefghijklmnopqrstuvwxyz";
@@ -359,24 +359,143 @@ function makeid(length: number) {
   return result;
 }
 
+const SOURCE_NAME = "gql";
+const GRAPHQL_STRING_RE = /("{3}[\s\S]*"{3}|"(?:\\.|[^"])*")/g;
+const REPLACE_CHAR_RE = /(#[^\n\r]+)?(?:\n|\r\n?|$)+/g;
+const docs = new Map();
+const prints = new Map();
+const replaceOutsideStrings = (str: string, idx: number) =>
+  idx % 2 === 0 ? str.replace(REPLACE_CHAR_RE, "\n") : str;
+
+const sanitizeDocument = (node: string) =>
+  node.split(GRAPHQL_STRING_RE).map(replaceOutsideStrings).join("").trim();
+
+function stringifyDocument(node: DocumentNode): string {
+  let printed: string;
+  if (typeof node === "string") {
+    printed = sanitizeDocument(node);
+    // @ts-ignore
+  } else if (node.loc && docs.get(node.__key) === node) {
+    printed = node.loc.source.body;
+  } else {
+    printed = prints.get(node) || sanitizeDocument(print(node));
+    prints.set(node, printed);
+  }
+  if (typeof node !== "string" && !node.loc) {
+    // @ts-ignore
+    node.loc = {
+      start: 0,
+      end: printed.length,
+      source: {
+        body: printed,
+        name: SOURCE_NAME,
+        locationOffset: {
+          line: 1,
+          column: 1,
+        },
+      },
+    };
+  }
+  return printed;
+}
+
+export function merge_documents(doc: TypedDocumentNode, fields_raw: string[]) {
+  const operation = doc.definitions[0] as OperationDefinitionNode;
+  const endpoint = operation.selectionSet.selections[0] as FieldNode;
+  const fields = new Array<FieldNode>();
+  fields.push(...(endpoint.selectionSet.selections as FieldNode[]));
+  for (const field of fields_raw) {
+    let current = fields;
+    field.split(".").forEach((f) => {
+      let found = false;
+      for (const key in current) {
+        const field = current[key];
+        if (field.name.value === f) {
+          if (field.selectionSet === undefined) {
+            current[key] = {
+              ...field,
+              selectionSet: {
+                kind: Kind.SELECTION_SET,
+                selections: [],
+              },
+            };
+          }
+          current = current[key].selectionSet.selections as FieldNode[];
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const new_field: FieldNode = {
+          kind: Kind.FIELD,
+          name: {
+            kind: Kind.NAME,
+            value: f,
+          },
+          selectionSet: {
+            kind: Kind.SELECTION_SET,
+            selections: [],
+          },
+        };
+        current.push(new_field);
+        current = new_field.selectionSet.selections as FieldNode[];
+      }
+    });
+  }
+  const final_doc: TypedDocumentNode<any, AnyVariables> = {
+    ...doc,
+    definitions: [
+      {
+        ...operation,
+        selectionSet: {
+          kind: Kind.SELECTION_SET,
+          selections: [
+            {
+              ...endpoint,
+              selectionSet: {
+                kind: Kind.SELECTION_SET,
+                selections: fields,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  };
+  return gql(stringifyDocument(final_doc));
+}
+
 function replace_promise(
   type: "query" | "mutation",
   id: string,
   entity: string,
   body: string,
-  variables: string
+  args_raw: string
 ) {
+  const q = gql`
+    query Hey {
+      stuff
+    }
+  `;
+  q.definitions;
   return `new Promise((r,c) => {
-    const variables = O${id}.${entity}__variables;
+    const args = [${args_raw.replace(/"/g, '\\"')}];
+    const variables = ${type === "query" ? "Q" : "M"}${id}.${entity}__variables;
     const keys = Object.keys(variables);
+    let query = I${id}.gql\`
+    ${type} ${entity}\${keys.length === 0 ? '' : '(' + Object.entries(variables).map(([key, value]) => '$' + key + ': ' + value).join(', ') + ')'} {
+      ${entity}\${keys.length === 0 ? '' : '(' + keys.map((key) => key + ': $' + key).join(', ') + ')'} ${body}
+    }
+\`;
+    const new_fields = args[1]?.fields ?? [];
+    if (new_fields.length > 0) {
+      query = Majksa${id}.merge_documents(query, new_fields);
+    }
   I${id}.${type}Store({
     client: ${id}_client,
-    query: I${id}.gql\`
-      ${type} ${entity}\${keys.length === 0 ? '' : '(' + Object.entries(variables).map(([key, value]) => '$' + key + ': ' + value).join(', ') + ')'} {
-        ${entity}\${keys.length === 0 ? '' : '(' + keys.map((key) => key + ': $' + key).join(', ') + ')'} ${body}
-      }
-  \`,
-    variables: ${variables}
+    query,
+    variables: args[0] ?? {},
+    context: args[1]?.context
   }).subscribe((result) => {
     if (result.fetching) {
       return;
@@ -393,41 +512,85 @@ function replace_promise(
 })`;
 }
 
-function script(content: string, promises: Map<string, object>, types: string) {
-  let has_import = content.match(
-    `import\\s*{([^}]+)}\\s*from\\s*['"]${escape_regex(types)}['"]`
-  );
-  if (has_import === null) {
-    return content;
+function get_alias(
+  type: "query" | "mutation",
+  operations: string | undefined,
+  content: string
+) {
+  if (operations === undefined) {
+    return undefined;
   }
+  let has_operations = content.match(
+    `import\\s*{([^}]+)}\\s*from\\s*['"]${escape_regex(operations)}['"]`
+  );
+  let has_operations_alias = content.match(
+    `import\\s*\\*\\s+as\\s+(\w+)\\s*from\\s*['"]${escape_regex(
+      operations
+    )}['"]`
+  );
+  if (has_operations === null && has_operations_alias === null) {
+    return undefined;
+  }
+  if (has_operations !== null) {
+    const parts = has_operations[1]
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => !s.startsWith("type"))
+      .map((s) => s.split(/\s+/))
+      .filter((s) => s[0] === type)[0];
+    return parts[1] == "as" ? parts[2] : type;
+  }
+  return has_operations_alias[1] + "." + type;
+}
 
-  const imported = has_import[1].split(",").map((s) => s.trim());
-  // const imported_types = get_imported_types(content, imported, types);
-  let id;
+function script(
+  content: string,
+  promises: Map<string, object>,
+  queries: string | undefined,
+  mutations: string | undefined,
+  typescript: boolean
+) {
+  let id: string;
   do {
     id = makeid(16);
   } while (content.includes(id));
 
-  const imported_operations = imported.filter((s) => !s.startsWith("type"));
   const operations = {
-    query: undefined,
-    mutation: undefined,
+    query: get_alias("query", queries, content),
+    mutation: get_alias("mutation", mutations, content),
   };
-  // TODO: fix Types.* like import
-  for (const operation of imported_operations) {
-    const parts = operation
-      .split(" ")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    if (parts.length > 0) {
-      if (parts[1] == "as") {
-        operations[parts[0]] = parts[2];
-      } else {
-        operations[parts[0]] = parts[0];
-      }
-    }
+
+  if (operations.query === undefined && operations.mutation === undefined) {
+    return content;
   }
 
+  if (!typescript) {
+    promises.forEach((_, name) => {
+      if (operations.query !== undefined) {
+        content = content.replace(
+          new RegExp(
+            `${escape_regex(name)}\\s*=\\s*${escape_regex(
+              operations.query
+            )}\\s*<[^>]+>\\s*\\([^)]*\\)`,
+            "g"
+          ),
+          `${name} = new Promise((r,c) => c(new CombinedError({networkError: new Error('TypeScript is required')})))`
+        );
+      }
+      if (operations.mutation !== undefined) {
+        content = content.replace(
+          new RegExp(
+            `${escape_regex(name)}\\s*=\\s*${escape_regex(
+              operations.mutation
+            )}\\s*<[^>]+>\\s*\\([^)]*\\)`,
+            "g"
+          ),
+          `${name} = new Promise((r,c) => c(new CombinedError({networkError: new Error('TypeScript is required')})))`
+        );
+      }
+    });
+    return content;
+  }
   promises.forEach((fields, name) => {
     const body = create_gql_body(fields);
     if (operations.query !== undefined) {
@@ -438,19 +601,8 @@ function script(content: string, promises: Map<string, object>, types: string) {
           )}\\s*<([^>]+)>\\s*\\(([^)]*)\\)`,
           "g"
         ),
-        (_, type, variables) => {
-          return (
-            name +
-            " = " +
-            replace_promise(
-              "query",
-              id,
-              type,
-              body,
-              variables.trim().length > 0 ? variables : "{}"
-            )
-          );
-        }
+        (_, type, args_raw) =>
+          name + " = " + replace_promise("query", id, type, body, args_raw)
       );
     }
     if (operations.mutation !== undefined) {
@@ -461,67 +613,69 @@ function script(content: string, promises: Map<string, object>, types: string) {
           )}\\s*<([^>]+)>\\s*\\(([^)]+)\\)`,
           "g"
         ),
-        (_, type, variables) =>
-          name +
-          " = " +
-          replace_promise(
-            "mutation",
-            id,
-            type,
-            body,
-            variables.trim().length > 0 ? variables : "{}"
-          )
+        (_, type, args_raw) =>
+          name + " = " + replace_promise("mutation", id, type, body, args_raw)
       );
     }
   });
 
-  return `
-import * as I${id} from '@urql/svelte';
-import * as O${id} from '${types}';
-const ${id}_client = I${id}.getContextClient();
-${content}`;
+  return (
+    `import * as I${id} from '@urql/svelte';\n` +
+    `import * as Majksa${id} from '@majksa/svelte-operations';\n` +
+    (queries !== undefined ? `import * as Q${id} from '${queries}';\n` : "") +
+    (mutations !== undefined
+      ? `import * as M${id} from '${mutations}';\n`
+      : "") +
+    `const ${id}_client = I${id}.getContextClient();\n` +
+    content
+  );
 }
 
 function markup(
   { content, filename }: { content: string; filename?: string },
-  types: string
+  queries: string | undefined,
+  mutations: string | undefined
 ): Processed {
   if (filename === undefined) {
     return {
       code: content,
     };
   }
-  // Get script and style from content
-  const script_elements = content.match(
-    /^([\s\S]*?)<script[^>]*>([\s\S]*?)<\/script>([\s\S]*)$/
-  );
-  if (script_elements === null) {
-    return {
-      code: content,
-    };
-  }
-
-  let new_script = script(script_elements[2], get_promises(content), types);
-  const code = content.replace(
-    /<script([^>]*)>[\s\S]*<\/script>/g,
-    (_, args) => `<script ${args}>
-    ${new_script}
-    </script>`
-  );
 
   return {
-    code,
+    code: content.replace(
+      /<script([^>]*)>([\s\S]*)<\/script>/g,
+      (_, args, body) =>
+        "<script" +
+        args +
+        ">\n" +
+        script(
+          body,
+          get_promises(content),
+          queries,
+          mutations,
+          args.match(/lang\s*=\s*["']ts["']/) !== null
+        ) +
+        "\n</script>"
+    ),
   };
 }
 
 export type SvelteProcessorConfig = {
-  types: string;
+  all?: string | undefined;
+  queries?: string | undefined;
+  mutations?: string | undefined;
 };
 
-export function graphqlPreprocess({
-  types,
-}: SvelteProcessorConfig): PreprocessorGroup {
+export function graphqlPreprocess(
+  config: SvelteProcessorConfig
+): PreprocessorGroup {
   return {
-    markup: (options) => markup(options, types),
+    markup: (options) =>
+      markup(
+        options,
+        config.queries ?? config.all,
+        config.mutations ?? config.all
+      ),
   };
 }

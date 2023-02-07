@@ -102,6 +102,7 @@ __metadata:
     "@graphql-codegen/plugin-helpers": ^3.0.0
     "@graphql-tools/apollo-engine-loader": ^6.2.5
     "@types/node": ^14.14.30
+    "@urql/svelte": ^3.0.3
     graphql: ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
     npm-dts: ^1.3.9
     svelte: ^3.55.1
@@ -114,6 +115,30 @@ __metadata:
   version: 14.18.36
   resolution: "@types/node@npm:14.18.36"
   checksum: da7f479b3fc996d585e60b8329987c6e310ddbf051e14f2d900ce04f7768f42fa7b760f0eb376008d3eca130ce9431018fb5c9e44027dcb7bb139c547e44b9c5
+  languageName: node
+  linkType: hard
+
+"@urql/core@npm:^3.1.1":
+  version: 3.1.1
+  resolution: "@urql/core@npm:3.1.1"
+  dependencies:
+    wonka: ^6.1.2
+  peerDependencies:
+    graphql: ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
+  checksum: 8fa40d9d1e387ec50571f78df59beae7d0eb9f7f4297255ad1c1201e7fe45d8f8fc4d9ed23586b2ae25531e1c200dee7486d42ac120d8d258d420f22a947a612
+  languageName: node
+  linkType: hard
+
+"@urql/svelte@npm:^3.0.3":
+  version: 3.0.3
+  resolution: "@urql/svelte@npm:3.0.3"
+  dependencies:
+    "@urql/core": ^3.1.1
+    wonka: ^6.0.0
+  peerDependencies:
+    graphql: ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
+    svelte: ^3.0.0
+  checksum: 8f0c20bff8a12fa6fe42cd40b375ad4476eb13fa2eca283e2bd4127b3d9cca40cdb51c55e012a77d9056e9a121797e441aef7201e118f04e9a25d96f06ef03e7
   languageName: node
   linkType: hard
 
@@ -1147,6 +1172,13 @@ __metadata:
     triple-beam: ^1.3.0
     winston-transport: ^4.5.0
   checksum: f1f1a860d2fa228b50880b20aaa6cc121085907791fe0d814ff9c062640f6b65da321726322094e7667eb63088b3bb67e7b4e219d998f29efcc6f583185a1cd3
+  languageName: node
+  linkType: hard
+
+"wonka@npm:^6.0.0, wonka@npm:^6.1.2":
+  version: 6.1.2
+  resolution: "wonka@npm:6.1.2"
+  checksum: 474dcffd3861faaf5df8f4ef1ea1e614eb0cf36f54003974ebd4ab43b8fd6aad26317ef75e55488e7a61d64922531ae3ca2890dac90922d46715e0dd795682ce
   languageName: node
   linkType: hard
 
