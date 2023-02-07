@@ -91,7 +91,7 @@ import type { AdditionalOptions as ${id}Types_AdditionalOptions } from '@majksa/
   if (config.queries === true && queries !== undefined) {
     result += `type ${id}Types_Query<R = object | null, V = object> = { R: R; V?: V };
 export function query<Q extends ${id}Types_Query>(variables: Q['V'] = undefined, options: ${id}Types_AdditionalOptions | undefined = undefined) {
-  return new Promise<Q['R']>((r) => r({} as Q['R']));
+  return new Promise<Q['R']>((r,c) => c(new Error('Operation has not been processed')));
 }
 `;
     Object.values(queries).forEach((query) => {
@@ -108,7 +108,7 @@ export const ${name}__variables = ${create_variables_array(query.args)};
   if (config.mutations === true && mutations !== undefined) {
     result += `type ${id}Types_Mutation<R = object | null, V = object> = { R: R; V?: V };
 export function mutation<M extends ${id}Types_Mutation>(variables: M['V'] = undefined, options: ${id}Types_AdditionalOptions | undefined = undefined) {
-  return new Promise<M['R']>((r) => r({} as M['R']));
+  return new Promise<M['R']>((r, c) => c(new Error('Operation has not been processed!')));
 }
 `;
     Object.values(mutations).forEach((mutation) => {
@@ -400,10 +400,16 @@ function stringifyDocument(node: DocumentNode): string {
 }
 
 export function merge_documents(doc: TypedDocumentNode, fields_raw: string[]) {
+  if (fields_raw.length === 0) {
+    return doc;
+  }
+
   const operation = doc.definitions[0] as OperationDefinitionNode;
   const endpoint = operation.selectionSet.selections[0] as FieldNode;
   const fields = new Array<FieldNode>();
-  fields.push(...(endpoint.selectionSet.selections as FieldNode[]));
+  if (endpoint.selectionSet !== undefined) {
+    fields.push(...(endpoint.selectionSet.selections as FieldNode[]));
+  }
   for (const field of fields_raw) {
     let current = fields;
     field.split(".").forEach((f) => {
@@ -565,30 +571,24 @@ function script(
   }
 
   if (!typescript) {
-    promises.forEach((_, name) => {
-      if (operations.query !== undefined) {
-        content = content.replace(
-          new RegExp(
-            `${escape_regex(name)}\\s*=\\s*${escape_regex(
-              operations.query
-            )}\\s*<[^>]+>\\s*\\([^)]*\\)`,
-            "g"
-          ),
-          `${name} = new Promise((r,c) => c(new CombinedError({networkError: new Error('TypeScript is required')})))`
-        );
-      }
-      if (operations.mutation !== undefined) {
-        content = content.replace(
-          new RegExp(
-            `${escape_regex(name)}\\s*=\\s*${escape_regex(
-              operations.mutation
-            )}\\s*<[^>]+>\\s*\\([^)]*\\)`,
-            "g"
-          ),
-          `${name} = new Promise((r,c) => c(new CombinedError({networkError: new Error('TypeScript is required')})))`
-        );
-      }
-    });
+    if (operations.query !== undefined) {
+      content = content.replace(
+        new RegExp(
+          `${escape_regex(operations.query)}\\s*<[^>]+>\\s*\\([^)]*\\)`,
+          "g"
+        ),
+        `new Promise((r,c) => c(new CombinedError({networkError: new Error('TypeScript is required')})))`
+      );
+    }
+    if (operations.mutation !== undefined) {
+      content = content.replace(
+        new RegExp(
+          `${escape_regex(operations.mutation)}\\s*<[^>]+>\\s*\\([^)]*\\)`,
+          "g"
+        ),
+        `new Promise((r,c) => c(new CombinedError({networkError: new Error('TypeScript is required')})))`
+      );
+    }
     return content;
   }
   promises.forEach((fields, name) => {
@@ -618,6 +618,24 @@ function script(
       );
     }
   });
+  if (operations.query !== undefined) {
+    content = content.replace(
+      new RegExp(
+        `${escape_regex(operations.query)}\\s*<([^>]+)>\\s*\\(([^)]*)\\)`,
+        "g"
+      ),
+      (_, type, args_raw) => replace_promise("query", id, type, "", args_raw)
+    );
+  }
+  if (operations.mutation !== undefined) {
+    content = content.replace(
+      new RegExp(
+        `${escape_regex(operations.mutation)}\\s*<([^>]+)>\\s*\\(([^)]+)\\)`,
+        "g"
+      ),
+      (_, type, args_raw) => replace_promise("mutation", id, type, "", args_raw)
+    );
+  }
 
   return (
     `import * as I${id} from '@urql/svelte';\n` +

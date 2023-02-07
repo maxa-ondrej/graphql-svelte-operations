@@ -1,6 +1,6 @@
 {
   "name": "@majksa/svelte-operations",
-  "version": "1.0.0-beta.4.9",
+  "version": "1.0.0-beta.4.12",
   "description": "GraphQL Code Generator plugin for processing query and mutation function and turn them into promises that request required fields.",
   "repository": {
     "type": "git",
