@@ -58,6 +58,8 @@ export function get_type(
 
 export type SvelteOperationsPluginConfig = {
   types: string;
+  queries?: boolean;
+  mutations?: boolean;
 };
 
 export const plugin: PluginFunction<SvelteOperationsPluginConfig, string> = (
@@ -67,20 +69,16 @@ export const plugin: PluginFunction<SvelteOperationsPluginConfig, string> = (
 ) => {
   const typesPath = config.types;
   let result = `import type * as Types from '${typesPath}';
-type Query<R = object | null, V = object> = { R: R; V?: V };
-type Mutation<R = object | null, V = object> = { R: R; V?: V };
-
+`;
+  const queries = schema.getQueryType()?.getFields();
+  const mutations = schema.getMutationType()?.getFields();
+  if (config.queries === true && queries !== undefined) {
+    result += `type Query<R = object | null, V = object> = { R: R; V?: V };
 export function query<Q extends Query>(variables: Q['V'] = undefined) {
-return new Promise<Q['R']>((r) => r({} as Q['R']));
-}
-
-export function mutation<Q extends Query>(variables: Q['V'] = undefined) {
-return new Promise<Q['R']>((r) => r({} as Q['R']));
+  return new Promise<Q['R']>((r) => r({} as Q['R']));
 }
 `;
-  const queryType = schema.getQueryType();
-  if (queryType !== undefined && queryType !== null)
-    Object.values(queryType.getFields()).forEach((query) => {
+    Object.values(queries).forEach((query) => {
       const name = query.name;
       result += `
 export type ${name} = Query<${get_type(query.type)}, ${create_variables(
@@ -89,19 +87,23 @@ export type ${name} = Query<${get_type(query.type)}, ${create_variables(
 export const ${name}__variables = ${create_variables_array(query.args)};
 `;
     });
-
-  const mutationType = schema.getMutationType();
-  if (mutationType !== undefined && mutationType !== null)
-    Object.values(mutationType.getFields()).forEach((mutation) => {
-      const name = mutation.name;
-      result += `
+  }
+  if (config.mutations === true && mutations !== undefined) {
+    result += `type Mutation<R = object | null, V = object> = { R: R; V?: V };
+export function mutation<Q extends Query>(variables: Q['V'] = undefined) {
+  return new Promise<Q['R']>((r) => r({} as Q['R']));
+}
+`;
+  }
+  Object.values(mutations).forEach((mutation) => {
+    const name = mutation.name;
+    result += `
 export type ${name} = Mutation<${get_type(mutation.type)}, ${create_variables(
-        mutation.args
-      )}>;
+      mutation.args
+    )}>;
 export const ${name}__variables = ${create_variables_array(mutation.args)};
 `;
-    });
-
+  });
   return result;
 };
 
