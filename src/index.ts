@@ -91,7 +91,8 @@ import type { AdditionalOptions as ${id}Types_AdditionalOptions } from '@majksa/
   if (config.queries === true && queries !== undefined) {
     result += `type ${id}Types_Query<R = object | null, V = object> = { R: R; V?: V };
 export function query<Q extends ${id}Types_Query>(variables: Q['V'] = undefined, options: ${id}Types_AdditionalOptions | undefined = undefined) {
-  return new Promise<Q['R']>((r,c) => c(new Error('Operation has not been processed')));
+  console.log("Unprocessed query", variables, options);
+  return new Promise<Q['R']>((_,c) => c(new Error('Operation has not been processed')));
 }
 `;
     Object.values(queries).forEach((query) => {
@@ -108,7 +109,8 @@ export const ${name}__variables = ${create_variables_array(query.args)};
   if (config.mutations === true && mutations !== undefined) {
     result += `type ${id}Types_Mutation<R = object | null, V = object> = { R: R; V?: V };
 export function mutation<M extends ${id}Types_Mutation>(variables: M['V'] = undefined, options: ${id}Types_AdditionalOptions | undefined = undefined) {
-  return new Promise<M['R']>((r, c) => c(new Error('Operation has not been processed!')));
+  console.log("Unprocessed query", variables, options);
+  return new Promise<M['R']>((_, c) => c(new Error('Operation has not been processed!')));
 }
 `;
     Object.values(mutations).forEach((mutation) => {
