@@ -19,6 +19,7 @@ Please keep in mind that GraphQL processor for SvelteKit is still under active d
   - [Example with additional settings](#example-with-additional-settings)
 - [Warnings](#warnings)
 - [Configuration](#configuration)
+  - [Urql](#urql)
   - [SvelteKit](#sveltekit)
   - [Codegen](#codegen)
 
@@ -129,6 +130,7 @@ You can use GraphQL operations in your SvelteKit app by importing them and using
 - Preprocessors currently supports only queries and mutations. Subscriptions are not supported yet.
 - When calling generated operations you cannot type any `)` character. This is because the preprocessor will think the function call is finished and will not generate the query.
 - Preproccessor currently only queries fields that are accessed in the markup part.
+- Preprocessor currently does not work in the very root +layout.svelte file. You need to use it in a child component.
 
 ## Configuration
 
@@ -138,6 +140,26 @@ You also need to decide whether you want to store your queries and mutations in 
 You also need to decide where you want to store your GraphQL schema types. The only requirement is that you need to be able to import it from your SvelteKit app.
 
 In the following example we will store our GraphQL queries in `$lib/queries`, mutations in `$lib/mutations` and schema types `$type/graphql`.
+
+### Urql
+
+You need to configure urql to use your GraphQL operations. You shoud do this in your `routes/+layout.svelte` file. You can do this by adding the following configuration:
+
+```svelte
+<script lang="ts">
+  import { initContextClient } from '@urql/svelte';
+
+  initContextClient({
+    url: '/graphql',
+    fetchOptions: {
+      credentials: 'include',
+      mode: 'cors'
+    }
+  });
+</script>
+```
+
+More information about configuring urql can be found in the [urql documentation](https://formidable.com/open-source/urql/docs/).
 
 ### SvelteKit
 
