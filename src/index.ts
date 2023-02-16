@@ -21,7 +21,7 @@ import {
   Kind,
 } from "graphql";
 
-function create_variables(args: readonly GraphQLArgument[], id: string) {
+function create_variables(args: readonly GraphQLArgument[], types: string) {
   if (args.length === 0) return "object = {}";
   return (
     "{" +
@@ -29,7 +29,7 @@ function create_variables(args: readonly GraphQLArgument[], id: string) {
       .map(
         (arg) =>
           `"${arg.name}"${isNullableType(arg.type) ? "?" : ""}: ${get_type(
-            id,
+            types,
             arg.type
           )}`
       )
@@ -46,23 +46,23 @@ function create_variables_array(args: readonly GraphQLArgument[]) {
 }
 
 function get_type(
-  id: string,
+  types: string,
   gql: GraphQLType | GraphQLInputType | GraphQLOutputType,
   nil = true
 ) {
   if (nil && isNullableType(gql)) {
-    return `${id}Types.Maybe<${get_type(id, gql, false)}>`;
+    return `${types}.Maybe<${get_type(types, gql, false)}>`;
   }
   if (nil && isNonNullType(gql)) {
-    return get_type(id, assertNonNullType(gql).ofType, false);
+    return get_type(types, assertNonNullType(gql).ofType, false);
   }
   if (isListType(gql)) {
-    return get_type(id, assertListType(gql).ofType) + "[]";
+    return get_type(types, assertListType(gql).ofType) + "[]";
   }
   if (isScalarType(gql)) {
-    return `${id}Types.Scalars['${gql}']`;
+    return `${types}.Scalars['${gql}']`;
   }
-  return `${id}Types.${gql}`;
+  return `${types}.${gql}`;
 }
 
 export type AdditionalOptions = {
@@ -72,6 +72,8 @@ export type AdditionalOptions = {
 
 export type SvelteOperationsPluginConfig = {
   types: string;
+  typesAlias?: string;
+  optionsAlias?: string;
   queries?: boolean;
   mutations?: boolean;
 };
@@ -81,19 +83,20 @@ export const plugin: PluginFunction<SvelteOperationsPluginConfig, string> = (
   documents: Types.DocumentFile[],
   config: SvelteOperationsPluginConfig
 ) => {
-  const id = makeid(16);
   const typesPath = config.types;
-  let result = `import type * as ${id}Types from '${typesPath}';
-import type { AdditionalOptions as ${id}Types_AdditionalOptions } from '@majksa/svelte-operations';
+  const types = config.typesAlias ?? "Types";
+  const options = config.optionsAlias ?? "Options";
+  let result = `import type * as ${types} from '${typesPath}';
+import type { AdditionalOptions as ${options} } from '@majksa/svelte-operations';
 `;
   const queries = schema.getQueryType()?.getFields();
   if (config.queries === true && queries !== undefined) {
     Object.values(queries).forEach((query) => {
       const name = query.name;
-      const type = get_type(id, query.type);
-      const variables = create_variables(query.args, id);
+      const type = get_type(types, query.type);
+      const variables = create_variables(query.args, types);
       result += `
-export function ${name}(variables: ${variables}, options: ${id}Types_AdditionalOptions = {}) {
+export function ${name}(variables: ${variables}, options: ${options} = {}) {
   console.error("Unprocessed query: ${name}", variables, options);
   return new Promise<${type}>((_,c) => c(new Error('Operation ${name} has not been processed')));
 }
@@ -106,10 +109,10 @@ export const ${name}__variables = ${create_variables_array(query.args)};
   if (config.mutations === true && mutations !== undefined) {
     Object.values(mutations).forEach((mutation) => {
       const name = mutation.name;
-      const type = get_type(id, mutation.type);
-      const variables = create_variables(mutation.args, id);
+      const type = get_type(types, mutation.type);
+      const variables = create_variables(mutation.args, types);
       result += `
-export function ${name}(variables: ${variables}, options: ${id}Types_AdditionalOptions = {}) {
+export function ${name}(variables: ${variables}, options: ${options} = {}) {
   console.error("Unprocessed mutation: ${name}", variables, options);
   return new Promise<${type}>((_,c) => c(new Error('Operation ${name} has not been processed')));
 }
@@ -527,7 +530,7 @@ function get_operations(operations: string | undefined, content: string) {
     )}['"]`
   );
   if (has_operations_alias !== null) {
-    console.error(
+    throw new Error(
       'Importing all operations as a single object is not supported. Please use "import { ... } from ...".'
     );
   }
@@ -567,10 +570,9 @@ function script(
   }
 
   if (!typescript) {
-    console.error(
+    throw new Error(
       "You need to use TypeScript to use this plugin. Please set the 'lang' attribute to \"ts\"."
     );
-    return content;
   }
   promises.forEach((fields, name) => {
     const body = create_gql_body(fields);

@@ -2,6 +2,8 @@
 
 ---
 
+**Version:** 1.0.0-beta.11
+
 This is a [SvelteKit](https://kit.svelte.dev/) adapter that allows you to use [GraphQL](https://graphql.org/) operations easily in your SvelteKit app.
 
 Please keep in mind that GraphQL processor for SvelteKit is still under active development and full backward compatibility is not guaranteed before reaching v1.0.0.
@@ -25,16 +27,16 @@ Please keep in mind that GraphQL processor for SvelteKit is still under active d
 
 ## Sponsor
 
-This project is sponsored and contributed to by [GreenPanda](https://greenpanda.cz/).
+This project is sponsored by and contributed to by [Green Panda s.r.o](https://greenpanda.cz/).
 
 ## Installation
 
 ```bash
-npm install --save-dev @majksa/svelte-operations@1.0.0-beta.10
+npm install --save-dev @majksa/svelte-operations@1.0.0-beta.11
 # or
-yarn add --dev @majksa/svelte-operations@1.0.0-beta.10
+yarn add --dev @majksa/svelte-operations@1.0.0-beta.11
 # or
-pnpm add --save-dev @majksa/svelte-operations@1.0.0-beta.10
+pnpm add --save-dev @majksa/svelte-operations@1.0.0-beta.11
 ```
 
 ## Prerequisites
@@ -206,17 +208,16 @@ generates:
       - add:
           content: ["// THIS FILE IS GENERATED, DO NOT EDIT!"]
       - "@majksa/svelte-operations":
-          types: "$type/graphql"
           queries: true
-          mutations: false
+          types: "$type/graphql"
+
   src/lib/mutations.ts:
     plugins:
       - add:
           content: ["// THIS FILE IS GENERATED, DO NOT EDIT!"]
       - "@majksa/svelte-operations":
-          types: "$type/graphql"
-          queries: false
           mutations: true
+          types: "$type/graphql"
 
 config:
   useTypeImports: true
@@ -231,4 +232,18 @@ config:
   scalars:
     Date: string
     DateTime: string
+```
+
+The code generator will also import your GraphQL schema types as `Types` and additional options type as `Options`.
+You can change those aliases by adding the following configuration:
+
+```yml
+generates:
+  src/lib/queries.ts:
+    plugins:
+      - "@majksa/svelte-operations":
+          queries: true
+          types: "$type/graphql"
+          typesAlias: "Types"
+          optionsAlias: "Options"
 ```
