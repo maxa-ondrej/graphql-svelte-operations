@@ -89,7 +89,7 @@ You can use GraphQL operations in your SvelteKit app by importing them and using
   import { GetPost } from "$lib/queries";
 
   const post = GetPost({
-    variable: {
+    post: {
       id: 1,
     }
   });
@@ -113,7 +113,7 @@ You can use GraphQL operations in your SvelteKit app by importing them and using
   import { GetPost } from "$lib/queries";
 
   GetPost({
-    variable: {
+    post: {
       id: 1,
     }
   }, {
