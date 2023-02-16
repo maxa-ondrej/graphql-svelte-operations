@@ -483,23 +483,25 @@ function replace_promise(
   `;
   q.definitions;
   return `new Promise((r,c) => {
-    const args = [${args_raw.replace(/"/g, '\\"')}];
-    const variables = ${type === "query" ? "Q" : "M"}${id}.${entity}__variables;
-    const keys = Object.keys(variables);
-    let query = I${id}.gql\`
-    ${type} ${entity}\${keys.length === 0 ? '' : '(' + Object.entries(variables).map(([key, value]) => '$' + key + ': ' + value).join(', ') + ')'} {
-      ${entity}\${keys.length === 0 ? '' : '(' + keys.map((key) => key + ': $' + key).join(', ') + ')'} ${body}
+    const ${id}_args = [${args_raw.replace(/"/g, '\\"')}];
+    const ${id}_variables = ${
+    type === "query" ? "Q" : "M"
+  }${id}.${entity}__variables;
+    const ${id}_keys = Object.keys(variables);
+    let ${id}_query = I${id}.gql\`
+    ${type} ${entity}\${${id}_keys.length === 0 ? '' : '(' + Object.entries(${id}_variables).map(([key, value]) => '$' + key + ': ' + value).join(', ') + ')'} {
+      ${entity}\${${id}_keys.length === 0 ? '' : '(' + ${id}_keys.map((key) => key + ': $' + key).join(', ') + ')'} ${body}
     }
 \`;
-    const new_fields = args[1]?.fields ?? [];
-    if (new_fields.length > 0) {
-      query = Majksa${id}.merge_documents(query, new_fields);
+    const ${id}_new_fields = ${id}_args[1]?.fields ?? [];
+    if (${id}_new_fields.length > 0) {
+      ${id}_query = Majksa${id}.merge_documents(query, new_fields);
     }
   I${id}.${type}Store({
     client: ${id}_client,
-    query,
-    variables: args[0] ?? {},
-    context: args[1]?.context
+    query: ${id}_query,
+    variables: ${id}_args[0] ?? {},
+    context: ${id}_args[1]?.context
   }).subscribe((result) => {
     if (result.fetching) {
       return;

@@ -2,7 +2,7 @@
 
 ---
 
-**Version:** 1.0.0-beta.11
+**Version:** 1.0.0-beta.12
 
 This is a [SvelteKit](https://kit.svelte.dev/) adapter that allows you to use [GraphQL](https://graphql.org/) operations easily in your SvelteKit app.
 
@@ -32,11 +32,11 @@ This project is sponsored by and contributed to by [Green Panda s.r.o](https://g
 ## Installation
 
 ```bash
-npm install --save-dev @majksa/svelte-operations@1.0.0-beta.11
+npm install --save-dev @majksa/svelte-operations@1.0.0-beta.12
 # or
-yarn add --dev @majksa/svelte-operations@1.0.0-beta.11
+yarn add --dev @majksa/svelte-operations@1.0.0-beta.12
 # or
-pnpm add --save-dev @majksa/svelte-operations@1.0.0-beta.11
+pnpm add --save-dev @majksa/svelte-operations@1.0.0-beta.12
 ```
 
 ## Prerequisites
